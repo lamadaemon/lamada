@@ -1,8 +1,8 @@
 # tool macros
 CC := gcc
 AR := llvm-ar
-CFLAGS := -O0 -Wall 
-COBJFLAGS := -O0 -c 
+CFLAGS := -O0 -Wall -fsanitize=address 
+COBJFLAGS := -O0 -g -c 
 ARFLAGS := -X 64 --thin
 
 # path macros

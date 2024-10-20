@@ -22,6 +22,8 @@
 #define TRUE 1
 #define FALSE 0
 
+#define PTR void*
+
 #define MASKED(a,b) ((a & b) != 0)
 
 #endif

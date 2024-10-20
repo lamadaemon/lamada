@@ -7,6 +7,26 @@
 #include <string.h>
 #include <time.h>
 
+static char* trim_string(char* str) {
+    char* original = str;
+    size_t last_white = 0;
+    size_t len = strlen(str);
+
+    while ((*str == ' ' || *str == '\t') && last_white < len) {
+        last_white ++;
+        str ++;
+    }
+
+    size_t buffer_size = len - last_white + 1;
+    char* new = (char*) lamada_allocate(buffer_size);
+    
+    memcpy(new, str, len - last_white);
+    new[buffer_size - 1] = '\0';
+
+    free(original);
+    return new;
+}
+
 struct mmap_entry {
     size_t start;
     size_t end;
@@ -19,44 +39,46 @@ struct mmap_entry {
 };
 
 static struct mmap_entry parse_map_entry(char* line) {
-    char* begin;
-    char* end;
-    char* perms;
-    char* offset;
-    char* device_maj;
-    char* device_min;
-    char* inode;
-    char* path;
-
-    begin = strtok(line, "-");
-    end = strtok(NULL, " ");
-    perms = strtok(NULL, " ");
-    offset = strtok(NULL, " ");
-    device_maj = strtok(NULL, ":");
-    device_min = strtok(NULL, " ");
-    inode = strtok(NULL, " ");
-    path = strtok(NULL, " ");
-
+    char* buff;
     struct mmap_entry entry;
+    
+    buff = strtok(line, "-");
+    printf("Comps: %s, ", buff);
+    entry.start = strtol(buff, NULL, 16);
 
-    entry.start = strtol(begin, NULL, 16);
-    entry.end = strtol(end, NULL, 16);
-    // TODO Parse perms 
-    entry.offset = strtol(offset, NULL, 10);
-    entry.dev_minor = strtol(device_min, NULL, 16);
-    entry.dev_major = strtol(device_maj, NULL, 16);
-    entry.inode = strtol(inode, NULL, 16);
-    entry.path = path;
+    buff = strtok(NULL, " ");
+    printf("%s, ", buff);
+    entry.end = strtol(buff, NULL, 16);
+    
+    buff = strtok(NULL, " ");
+    printf("%s, ", buff);
+    entry.perms = 0;
 
-    free(begin);
-    free(end);
-    free(perms);
-    free(offset);
-    free(device_maj);
-    free(device_min);
-    free(inode);
+    buff = strtok(NULL, " ");
+    printf("%s, ", buff);
+    entry.offset = strtol(buff, NULL, 16);
+    
+    buff = strtok(NULL, ":");
+    printf("%s, ", buff);
+    entry.dev_major = strtol(buff, NULL, 16);
+    
+    buff = strtok(NULL, " ");
+    printf("%s, ", buff);
+    entry.dev_minor = strtol(buff, NULL, 16);
+    
+    buff = strtok(NULL, " ");
+    printf("%s, ", buff);
+    entry.inode = strtol(buff, NULL, 16);
+    
+    buff = strtok(NULL, "\n");
+    printf("%s \n", buff);
+    entry.path = trim_string(strdup(buff));
 
     return entry;
+}
+
+static void release_map_entry(struct mmap_entry* entry) {
+    free(entry->path);
 }
 
 runtime_module_t* lamada_lookup_module(char *name, uint8_t options) {
@@ -65,9 +87,9 @@ runtime_module_t* lamada_lookup_module(char *name, uint8_t options) {
         return NULL;
     }
 
-    char* line;
-    size_t size;
-    ssize_t len;
+    char* line = NULL;
+    size_t size = 0;
+    ssize_t len = 0;
 
     runtime_module_t* result = lamada_allocate(sizeof(runtime_module_t));   
 
@@ -75,33 +97,34 @@ runtime_module_t* lamada_lookup_module(char *name, uint8_t options) {
     while ((len = getline(&line, &size, maps_handle)) != -1) {
         char* occur_ptr;
         if ((occur_ptr = strstr(line, name)) != NULL) {
-            printf("%llu nq %u = %u Matched from: %s", occur_ptr, NULL, occur_ptr != NULL, line);
             struct mmap_entry entry = parse_map_entry(line);
-
-            if (result->base) {
+            
+            if (!result->base) {
                 result->base = (void*) entry.start;
                 result->full_name = entry.path;
                 result->name = name;
+            } else {
+                release_map_entry(&entry);
             }
 
             result->size += entry.end - entry.start;
        
-            free(line);
         } else {
-            free(line);
-
             if (chunk_started) {
                 break;
             }
         }
     }
 
+    free(line);
+    fclose(maps_handle);
+
     return result;
 }
 
 int main() {
     runtime_module_t* module = lamada_lookup_module("libc.so", 0);
-    printf("path %s, base %llu\n", module->full_name, module->base);
+    printf("path %s, base %p, size %llu\n", module->full_name, module->base, module->size);
 
     free(module);
     return 0;
