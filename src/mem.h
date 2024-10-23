@@ -6,6 +6,8 @@
 /**
  * Allocate a clean buffer on heap.
  */
-void* lamada_allocate(size_t len);
+PTR lamada_allocate(size_t len);
+void lamada_release(PTR* ptr);
+void lamada_clean(PTR ptr, size_t len);
 
 #endif

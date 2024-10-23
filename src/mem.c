@@ -10,9 +10,13 @@ PTR lamada_allocate(size_t size) {
     return buff;
 }
 
-void lamada_free(PTR* target) {
+void lamada_release(PTR* target) {
     if (*target) {
         free(*target);
         (*target) = NULL;
     }
+}
+
+void lamada_clean(PTR ptr, size_t len) {
+    memset(ptr, 0, len);
 }

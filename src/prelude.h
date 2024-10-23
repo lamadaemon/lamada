@@ -25,5 +25,8 @@
 #define PTR void*
 
 #define MASKED(a,b) ((a & b) != 0)
+#define UNITYPE(a) ((void*) a)
+#define DATACLS(a,b) {memset(&b, 0, sizeof(a))}
+
 
 #endif
