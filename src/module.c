@@ -2,6 +2,7 @@
 #include "mem.h"
 #include "prelude.h"
 
+#include <bits/stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -108,7 +109,6 @@ runtime_module_t* lamada_lookup_module(char* name, uint8_t options) {
         char* occur_ptr;
 
         if ((occur_ptr = strstr(line, name)) != NULL) {    
-            printf("%s", line);
             if (MASKED(options, MODLOOKUP_MATCHFULL) && occur_ptr != line) {
                 goto match_failed;
             }
@@ -174,19 +174,6 @@ finalize:
 }
 
 
-int main() {
-    runtime_module_t* module = lamada_lookup_module("libc.so", MODLOOKUP_COMBINED | MODLOOKUP_XONLY);
-    if (module) {
-        printf("call lamada_lookup_module(MODLOOKUP_XONLY | MODLOOKUP_COMBINED): path %s, base %p, size %lu\n", module->full_name, module->base, module->size);
-    } else {
-        printf("FAIL (NOT FOUND OR ERROR)\n");
-    }
-
-    free(module);
-    return 0;
-
-}
-
 struct pattern_entry {
     BOOL generic;
     uint8_t remaining;
@@ -197,20 +184,23 @@ struct pattern_entry* compile_pattern(char* pattern) {
     uint8_t len = (strlen(pattern) + 1) / 3;
     struct pattern_entry* result = lamada_allocate(sizeof(struct pattern_entry) * len);
     char* in = strdup(pattern);
-    char* byte = NULL;
+    char* byte = strtok(in, " ");
 
     
     uint8_t curr = 0;
-    while ((byte = strtok(in, " ")) != NULL) {
+    while (curr < len) {
         if (byte[0] == '?' || byte[0] == '*') {
             result[curr].generic = TRUE;
         } else { 
             result[curr].byte = strtol(byte, NULL, 16);
         }
 
-        result[curr].remaining = len - 1;
+        result[curr].remaining = len - curr;
         curr ++;
+        byte = strtok(NULL, " ");
     }
+
+    printf("len resolved: %u \n", (unsigned int)len);
 
     return result;
 }
@@ -225,6 +215,16 @@ PTR lamada_lookup_symbol(runtime_module_t* mod, char* data, uint8_t options) {
         if (MASKED(options, SYMLOOKUP_STRPATTERN)) {
             struct pattern_entry* pattern = compile_pattern(data);
             uint8_t pattern_size = pattern[0].remaining + 1;
+
+            for (size_t i = 0; i < pattern_size; i++) {
+                struct pattern_entry curr = pattern[i];
+                if (curr.generic) {
+                    printf("?? ");
+                } else {
+                    printf("%x ", curr.byte);
+                }    
+            }
+            printf("\n");
 
             for (size_t i = 0; i < mod->size; i++) {
                 if (pattern[0].byte == ((int8_t*) mod->base)[i]) {
@@ -267,4 +267,41 @@ loop1_end:
     return NULL;
 }
 
+
+int main() {
+    runtime_module_t* module = lamada_lookup_module("libc.so", MODLOOKUP_COMBINED | MODLOOKUP_XONLY);
+    if (module) {
+        printf("call lamada_lookup_module(MODLOOKUP_XONLY | MODLOOKUP_COMBINED): path %s, base %p, size %lu\n", module->full_name, module->base, module->size);
+    } else {
+        printf("FAIL (NOT FOUND OR ERROR)\n");
+    }
+
+    void* fopen_fn = lamada_lookup_symbol(module, "fopen", SYMLOOKUP_BYEXPORTNAME);
+
+    FILE* file = ((FILE* (*)(char*, char*)) fopen_fn)("/proc/self/maps", "r");
+
+    char* line = NULL;
+    size_t size = 0;
+    ssize_t len = 0;
+
+    while ((len = getline(&line, &size, file)) != -1) {
+        printf("%s", line);
+    }
+
+    fclose(file);
+    free(line);
+
+    for (size_t i = 0; i < 15; i++) {
+        printf("%x ", ((uint8_t*) fopen_fn)[i]);
+    }
+    printf("\n");
+
+    // pattern 3f 23 3 d5 ff 43 1 d1 fd 7b 1 a9 f7 13 0
+    void* fopen_fn2 = lamada_lookup_symbol(module, "3f 23 03 d5 ff 43 01 d1 ?? ?? 01 a9 f7 13 00", SYMLOOKUP_BYPATTERN | SYMLOOKUP_STRPATTERN);
+    printf("by exportname: %p, by strpattern: %p\n", fopen_fn, fopen_fn2);
+
+    free(module);
+    return 0;
+
+}
 
