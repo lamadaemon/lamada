@@ -1,5 +1,7 @@
-
+# Omit output directory
 bin
 obj
-compile_commands.json
 
+# Omit compiler assistant stuff
+compile_commands.json
+.cache
