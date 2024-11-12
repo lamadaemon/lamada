@@ -20,8 +20,8 @@ ifeq ($(PREFIX),)
 endif
 
 # compile macros
-TARGET_NAME_DYNAMIC := liblamadamem
-TARGET_NAME_STATIC  := liblamadamem
+TARGET_NAME_DYNAMIC := liblamada
+TARGET_NAME_STATIC  := liblamada
 
 ifeq ($(OS),Windows_NT)
 	$(error This library was not intended to be working on Windows Platform.)
