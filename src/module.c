@@ -2,8 +2,6 @@
 #include "mem.h"
 #include "prelude.h"
 
-#include <bits/stdatomic.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -173,6 +171,10 @@ finalize:
     return result;
 }
 
+void lamada_release_module(runtime_module_t* mod) {
+    free(mod->full_name);
+    free(mod);
+}
 
 struct pattern_entry {
     BOOL generic;
@@ -200,8 +202,6 @@ struct pattern_entry* compile_pattern(char* pattern) {
         byte = strtok(NULL, " ");
     }
 
-    printf("len resolved: %u \n", (unsigned int)len);
-
     return result;
 }
 
@@ -214,32 +214,32 @@ PTR lamada_lookup_symbol(runtime_module_t* mod, char* data, uint8_t options) {
         // strstr without length may cause problems 
         if (MASKED(options, SYMLOOKUP_STRPATTERN)) {
             struct pattern_entry* pattern = compile_pattern(data);
-            uint8_t pattern_size = pattern[0].remaining + 1;
+            uint8_t pattern_size = pattern[0].remaining;
 
-            for (size_t i = 0; i < pattern_size; i++) {
-                struct pattern_entry curr = pattern[i];
-                if (curr.generic) {
-                    printf("?? ");
-                } else {
-                    printf("%x ", curr.byte);
-                }    
-            }
-            printf("\n");
+            size_t i = 0;
 
-            for (size_t i = 0; i < mod->size; i++) {
-                if (pattern[0].byte == ((int8_t*) mod->base)[i]) {
-                    // Loop starts from 1 since the first byte is already checked
-                    for (size_t j = 1; j < pattern_size; j++) {
-                        if (pattern[j].byte != ((int8_t*) mod->base)[i + j]) {
-                            goto loop1_end;
-                        }
-                    }
-
-                    // matched
-                    
-                    return (PTR)((size_t) (mod->base) + i);
+            for (i = 0; i < mod->size; i++) {
+                if (mod->size - i < pattern_size) {
+                    break;
                 }
+
+                for (size_t j = 0; j < pattern_size; j++) {
+
+                    if (!pattern[j].generic && pattern[j].byte != ((uint8_t*) mod->base)[i + j]) {
+                        goto loop2_end;
+                    }
+                }
+
+                // matched
+                
+                free(pattern);
+                return (PTR)((size_t) (mod->base) + i);
+
+loop2_end:
+                continue;
             }
+
+            free(pattern);
         } else {
             uint8_t pattern_size = *((uint8_t*) data);
 
@@ -265,43 +265,5 @@ loop1_end:
     }
 
     return NULL;
-}
-
-
-int main() {
-    runtime_module_t* module = lamada_lookup_module("libc.so", MODLOOKUP_COMBINED | MODLOOKUP_XONLY);
-    if (module) {
-        printf("call lamada_lookup_module(MODLOOKUP_XONLY | MODLOOKUP_COMBINED): path %s, base %p, size %lu\n", module->full_name, module->base, module->size);
-    } else {
-        printf("FAIL (NOT FOUND OR ERROR)\n");
-    }
-
-    void* fopen_fn = lamada_lookup_symbol(module, "fopen", SYMLOOKUP_BYEXPORTNAME);
-
-    FILE* file = ((FILE* (*)(char*, char*)) fopen_fn)("/proc/self/maps", "r");
-
-    char* line = NULL;
-    size_t size = 0;
-    ssize_t len = 0;
-
-    while ((len = getline(&line, &size, file)) != -1) {
-        printf("%s", line);
-    }
-
-    fclose(file);
-    free(line);
-
-    for (size_t i = 0; i < 15; i++) {
-        printf("%x ", ((uint8_t*) fopen_fn)[i]);
-    }
-    printf("\n");
-
-    // pattern 3f 23 3 d5 ff 43 1 d1 fd 7b 1 a9 f7 13 0
-    void* fopen_fn2 = lamada_lookup_symbol(module, "3f 23 03 d5 ff 43 01 d1 ?? ?? 01 a9 f7 13 00", SYMLOOKUP_BYPATTERN | SYMLOOKUP_STRPATTERN);
-    printf("by exportname: %p, by strpattern: %p\n", fopen_fn, fopen_fn2);
-
-    free(module);
-    return 0;
-
 }
 

@@ -29,7 +29,16 @@ typedef struct runtime_module runtime_module_t;
 #define MODPERMS_EXECUTE (1 << 2)
 #define MODPERMS_PRIVATE (1 << 3)
 
+/**
+ * Lookup information of a specified loaded module.
+ * NULL will be returned if fails.
+ */
 runtime_module_t* lamada_lookup_module(char* name, mask8 options);
+
+/**
+ * Cleanup runtime_module_t after use.
+ */
+void lamada_release_module(runtime_module_t* mod);
 
 #define SYMLOOKUP_PRESERVED1 (1 << 0)
 #define SYMLOOKUP_PRESERVED2 (1 << 1)
@@ -42,7 +51,7 @@ runtime_module_t* lamada_lookup_module(char* name, mask8 options);
 
 /**
  * Lookup a symbol from a runtime_module.
- * NULL will be returned if fail.
+ * NULL will be returned if fails.
  */
 void* lamada_lookup_symbol(runtime_module_t* mod, char* data, mask8 options);
 
